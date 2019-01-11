@@ -11,7 +11,7 @@ import torch.optim as optim
 
 BUFFER_SIZE = int(1e5)  # replay buffer size
 BATCH_SIZE = 128       # minibatch size
-GAMMA = 0.99            # discount factor
+GAMMA = 1            # discount factor
 TAU = 1e-3              # for soft update of target parameters
 LR_ACTOR = 3e-4         # learning rate of the actor 
 LR_CRITIC = 2e-4       # learning rate of the critic
@@ -19,20 +19,22 @@ WEIGHT_DECAY = 1e-4       # L2 weight decay
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-class Agent():
+class Agents():
     """Interacts with and learns from the environment."""
     
-    def __init__(self, state_size, action_size, random_seed):
+    def __init__(self, state_size, action_size, num_agents, random_seed):
         """Initialize an Agent object.
         
         Params
         ======
             state_size (int): dimension of each state
             action_size (int): dimension of each action
+            num_agents (int): number of agents
             random_seed (int): random seed
         """
         self.state_size = state_size
         self.action_size = action_size
+        self.num_agents = num_agents
         self.seed = random.seed(random_seed)
 
         # Actor Network (w/ Target Network)
@@ -45,41 +47,50 @@ class Agent():
         self.critic_target = Critic(state_size, action_size, random_seed).to(device)
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
         
+        '''
         # hard copy weights (as proposed in udacity student channels)
         self.hard_copy_weights(self.actor_target, self.actor_local)
         self.hard_copy_weights(self.critic_target, self.critic_local)
+        '''
 
         # Noise process
-        self.noise = OUNoise(action_size, random_seed)
+        self.noise = OUNoise((num_agents, action_size), random_seed)
 
         # Replay memory
         self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
-        
+    
+    '''
     def hard_copy_weights(self, target, source):
         """ copy weights from source to target network (part of initialization)"""
         for target_param, param in zip(target.parameters(), source.parameters()):
             target_param.data.copy_(param.data)
+    '''
     
     def step(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
         # Save experience / reward
-        self.memory.add(state, action, reward, next_state, done)
+        for a in range(self.num_agents):
+            self.memory.add(state[a,:], action[a,:], reward[a], next_state[a,:], done[a])
 
         # Learn, if enough samples are available in memory
         if len(self.memory) > BATCH_SIZE:
             experiences = self.memory.sample()
             self.learn(experiences, GAMMA)
 
-    def act(self, state, add_noise=True):
+    def act(self, states, add_noise=True):
         """Returns actions for given state as per current policy."""
-        state = torch.from_numpy(state).float().to(device)
+        states = torch.from_numpy(states).float().to(device)
         self.actor_local.eval()
+        actions = np.zeros((self.num_agents, self.action_size))
+        
         with torch.no_grad():
-            action = self.actor_local(state).cpu().data.numpy()
+            for a, state in enumerate(states):
+                action = self.actor_local(state).cpu().data.numpy()
+                actions[a, :] = action
         self.actor_local.train()
         if add_noise:
-            action += self.noise.sample()
-        return np.clip(action, -1, 1)
+            actions += self.noise.sample()
+        return np.clip(actions, -1, 1)
 
     def reset(self):
         self.noise.reset()
