@@ -9,13 +9,13 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
-BUFFER_SIZE = int(1e5)  # replay buffer size
+BUFFER_SIZE = int(1e6)  # replay buffer size
 BATCH_SIZE = 128       # minibatch size
-GAMMA = 1            # discount factor
+GAMMA = 0.99            # discount factor
 TAU = 1e-3              # for soft update of target parameters
-LR_ACTOR = 3e-4         # learning rate of the actor 
-LR_CRITIC = 2e-4       # learning rate of the critic
-WEIGHT_DECAY = 1e-4       # L2 weight decay
+LR_ACTOR = 1e-3         # learning rate of the actor 
+LR_CRITIC = 1e-3       # learning rate of the critic
+WEIGHT_DECAY = 0       # L2 weight decay
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -47,11 +47,11 @@ class Agents():
         self.critic_target = Critic(state_size, action_size, random_seed).to(device)
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
         
-        '''
+  
         # hard copy weights (as proposed in udacity student channels)
         self.hard_copy_weights(self.actor_target, self.actor_local)
         self.hard_copy_weights(self.critic_target, self.critic_local)
-        '''
+
 
         # Noise process
         self.noise = OUNoise((num_agents, action_size), random_seed)
@@ -59,12 +59,12 @@ class Agents():
         # Replay memory
         self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
     
-    '''
+
     def hard_copy_weights(self, target, source):
         """ copy weights from source to target network (part of initialization)"""
         for target_param, param in zip(target.parameters(), source.parameters()):
             target_param.data.copy_(param.data)
-    '''
+
     
     def step(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
